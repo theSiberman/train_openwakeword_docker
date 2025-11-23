@@ -1,0 +1,44 @@
+# Generated audio samples
+generated_samples/
+real_samples/
+
+# Voice models (large files - download via setup.sh)
+models/
+*.onnx
+*.json
+
+# Cloned repositories (installed via setup.sh)
+piper-sample-generator/
+
+# Trained models (output files)
+*.tflite
+*_tf/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+.dockerignore
