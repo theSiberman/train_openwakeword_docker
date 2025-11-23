@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(chmod:*)",
+      "Bash(./setup.sh:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker image:*)",
+      "Bash(./train.sh:*)",
+      "Bash(xargs:*)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:brycebeattie.com)",
+      "WebFetch(domain:rhasspy.github.io)",
+      "Bash(docker run:*)",
+      "Bash(docker commit:*)",
+      "Bash(cat:*)",
+      "Bash(sed:*)",
+      "Bash(sudo chown:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
