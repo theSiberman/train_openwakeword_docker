@@ -34,7 +34,7 @@ fi
 echo ""
 echo "[2/3] Installing Python packages..."
 echo "  This may take 5-10 minutes..."
-pip install -q openwakeword piper-tts piper-phonemize webrtcvad onnx onnx-tf onnxscript tensorflow torchinfo==1.8.0 torchmetrics==1.2.0 mutagen==1.47.0 scipy matplotlib datasets speechbrain
+pip install -q openwakeword piper-tts webrtcvad onnx onnx-tf onnxscript tensorflow torchinfo==1.8.0 torchmetrics==1.2.0 mutagen==1.47.0 scipy matplotlib datasets speechbrain
 
 # 3. Clone and install piper-sample-generator
 echo ""
