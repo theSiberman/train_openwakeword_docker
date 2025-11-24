@@ -16,7 +16,17 @@
       "Bash(docker commit:*)",
       "Bash(cat:*)",
       "Bash(sed:*)",
-      "Bash(sudo chown:*)"
+      "Bash(sudo chown:*)",
+      "Bash(docker:*)",
+      "Bash(service docker:*)",
+      "Bash(pkill:*)",
+      "Bash(pip --version:*)",
+      "Bash(./setup_direct.sh:*)",
+      "Bash(python3:*)",
+      "Bash(python3.10:*)",
+      "Bash(pip show:*)",
+      "Bash(./train_direct.sh:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

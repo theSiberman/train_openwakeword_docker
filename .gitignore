@@ -11,8 +11,6 @@ models/
 piper-sample-generator/
 
 # Trained models (output files)
-*.tflite
-*_tf/
 
 # Python cache
 __pycache__/

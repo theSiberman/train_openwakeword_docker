@@ -28,19 +28,37 @@ echo ""
 
 # Step 1: Generate synthetic samples (if needed)
 SAMPLE_COUNT=$(ls generated_samples/*.wav 2>/dev/null | wc -l)
-if [ "$SAMPLE_COUNT" -ge 2000 ]; then
+TARGET_SAMPLES=2000
+
+if [ "$SAMPLE_COUNT" -ge "$TARGET_SAMPLES" ]; then
     echo "🔊 Using existing $SAMPLE_COUNT audio clips..."
 else
-    echo "🔊 Generating synthetic audio clips..."
+    echo "🔊 Generating synthetic audio clips (target: $TARGET_SAMPLES)..."
     mkdir -p generated_samples
-    python3 /opt/piper-sample-generator/generate_samples.py "$WAKE_WORD" \
+
+    # Start generation in background
+    python3.10 /opt/piper-sample-generator/generate_samples.py "$WAKE_WORD" \
         --model $VOICE_DIR/en_US-lessac-medium.onnx \
-        --max-samples 2000 \
-        --output-dir generated_samples
+        --max-samples $TARGET_SAMPLES \
+        --output-dir generated_samples &
+
+    GENERATION_PID=$!
+
+    # Monitor progress
+    while kill -0 $GENERATION_PID 2>/dev/null; do
+        CURRENT=$(ls generated_samples/*.wav 2>/dev/null | wc -l)
+        echo "  → Generated $CURRENT/$TARGET_SAMPLES samples..."
+        sleep 5
+    done
+
+    # Wait for completion
+    wait $GENERATION_PID
+    FINAL_COUNT=$(ls generated_samples/*.wav 2>/dev/null | wc -l)
+    echo "  ✓ Generation complete: $FINAL_COUNT samples"
 fi
 
 # Step 2: Train the model
-python3 << 'PYTHON_SCRIPT'
+python3.10 << 'PYTHON_SCRIPT'
 import glob, os, shutil
 import numpy as np
 from openwakeword.utils import AudioFeatures
@@ -127,7 +145,7 @@ dummy_input = torch.randn(1, input_dim)
 output_path = f"{OUTPUT_MODEL_ENV}.onnx"
 torch.onnx.export(
     model, dummy_input, output_path,
-    export_params=True, opset_version=12
+    export_params=True, opset_version=18
 )
 
 print("  ✓ ONNX model saved")
@@ -136,21 +154,69 @@ print("  ✓ ONNX model saved")
 print("📦 Converting to TFLite...")
 try:
     import onnx
-    from onnx_tf.backend import prepare
     import tensorflow as tf
+    import subprocess
+    import sys
 
-    onnx_model = onnx.load(f"{OUTPUT_MODEL_ENV}.onnx")
-    tf_rep = prepare(onnx_model)
-    tf_rep.export_graph(f"{OUTPUT_MODEL_ENV}_tf")
+    # Try using onnx2tf (better ONNX opset 18 support)
+    try:
+        import onnx2tf
+        onnx2tf.convert(
+            input_onnx_file_path=f"{OUTPUT_MODEL_ENV}.onnx",
+            output_folder_path=f"{OUTPUT_MODEL_ENV}_tf",
+            copy_onnx_file=False,
+            non_verbose=True
+        )
 
-    converter = tf.lite.TFLiteConverter.from_saved_model(f"{OUTPUT_MODEL_ENV}_tf")
-    tflite_model = converter.convert()
+        # Find the saved model directory
+        import os
+        savedmodel_dir = None
+        for item in os.listdir(f"{OUTPUT_MODEL_ENV}_tf"):
+            if "savedmodel" in item.lower():
+                savedmodel_dir = os.path.join(f"{OUTPUT_MODEL_ENV}_tf", item)
+                break
 
-    with open(f"{OUTPUT_MODEL_ENV}.tflite", "wb") as f:
-        f.write(tflite_model)
+        if not savedmodel_dir:
+            savedmodel_dir = f"{OUTPUT_MODEL_ENV}_tf"
 
-    print("  ✓ TFLite model saved")
-    shutil.rmtree(f"{OUTPUT_MODEL_ENV}_tf", ignore_errors=True)
+        converter = tf.lite.TFLiteConverter.from_saved_model(savedmodel_dir)
+        tflite_model = converter.convert()
+
+        with open(f"{OUTPUT_MODEL_ENV}.tflite", "wb") as f:
+            f.write(tflite_model)
+
+        print("  ✓ TFLite model saved (via onnx2tf)")
+        shutil.rmtree(f"{OUTPUT_MODEL_ENV}_tf", ignore_errors=True)
+    except ImportError:
+        print("  → onnx2tf not available, installing...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "onnx2tf"])
+        import onnx2tf
+
+        onnx2tf.convert(
+            input_onnx_file_path=f"{OUTPUT_MODEL_ENV}.onnx",
+            output_folder_path=f"{OUTPUT_MODEL_ENV}_tf",
+            copy_onnx_file=False,
+            non_verbose=True
+        )
+
+        import os
+        savedmodel_dir = None
+        for item in os.listdir(f"{OUTPUT_MODEL_ENV}_tf"):
+            if "savedmodel" in item.lower():
+                savedmodel_dir = os.path.join(f"{OUTPUT_MODEL_ENV}_tf", item)
+                break
+
+        if not savedmodel_dir:
+            savedmodel_dir = f"{OUTPUT_MODEL_ENV}_tf"
+
+        converter = tf.lite.TFLiteConverter.from_saved_model(savedmodel_dir)
+        tflite_model = converter.convert()
+
+        with open(f"{OUTPUT_MODEL_ENV}.tflite", "wb") as f:
+            f.write(tflite_model)
+
+        print("  ✓ TFLite model saved (via onnx2tf)")
+        shutil.rmtree(f"{OUTPUT_MODEL_ENV}_tf", ignore_errors=True)
 except Exception as e:
     print(f"  ⚠ TFLite conversion failed: {e}")
     print("  → ONNX model is still available")
