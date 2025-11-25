@@ -56,23 +56,20 @@ def main():
         print("⚠ Warning: No negative samples found. Training without negative samples will be less robust.")
         print("   Consider running: ./generate_samples_direct.sh \"" + wake_word + "\"")
 
-    # Extract features from audio clips
+    # Extract features from audio clips using embed_clips (batch processing)
     print("🔊 Extracting audio features...")
     F = AudioFeatures()
-    all_features = []
-    all_labels = []
 
-    # Process positive samples
+    # Load all positive audio clips
+    print("  → Loading positive samples...")
+    positive_audio = []
     for i, clip_path in enumerate(positive_paths):
-        if (i+1) % 500 == 0:
-            print(f"  → Processed {i+1}/{len(positive_paths)} positive clips")
-
         try:
             sr, audio_data = wav.read(clip_path)
 
             # Convert stereo to mono if needed
             if len(audio_data.shape) > 1:
-                audio_data = audio_data.mean(axis=1)
+                audio_data = audio_data.mean(axis=1).astype(np.int16)
 
             # AudioFeatures expects int16 data
             if audio_data.dtype != np.int16:
@@ -81,29 +78,20 @@ def main():
                 elif audio_data.dtype == np.int32:
                     audio_data = (audio_data / 65536).astype(np.int16)
 
-            features = F._get_embeddings(audio_data)
-
-            # Ensure features are 2D and have valid shape
-            if len(features.shape) == 1:
-                # Skip 1D features (likely too short or corrupted)
-                continue
-            if features.shape[0] > 0 and len(features.shape) == 2:
-                all_features.append(features)
-                all_labels.append(np.ones((features.shape[0], 1)))  # Label 1 for positive
+            positive_audio.append(audio_data)
         except Exception as e:
             print(f"  ⚠ Skipping {clip_path}: {e}")
 
-    # Process negative samples
+    # Load all negative audio clips
+    print("  → Loading negative samples...")
+    negative_audio = []
     for i, clip_path in enumerate(negative_paths):
-        if (i+1) % 500 == 0:
-            print(f"  → Processed {i+1}/{len(negative_paths)} negative clips")
-
         try:
             sr, audio_data = wav.read(clip_path)
 
             # Convert stereo to mono if needed
             if len(audio_data.shape) > 1:
-                audio_data = audio_data.mean(axis=1)
+                audio_data = audio_data.mean(axis=1).astype(np.int16)
 
             # AudioFeatures expects int16 data
             if audio_data.dtype != np.int16:
@@ -112,24 +100,24 @@ def main():
                 elif audio_data.dtype == np.int32:
                     audio_data = (audio_data / 65536).astype(np.int16)
 
-            features = F._get_embeddings(audio_data)
-
-            # Ensure features are 2D and have valid shape
-            if len(features.shape) == 1:
-                # Skip 1D features (likely too short or corrupted)
-                continue
-            if features.shape[0] > 0 and len(features.shape) == 2:
-                all_features.append(features)
-                all_labels.append(np.zeros((features.shape[0], 1)))  # Label 0 for negative
+            negative_audio.append(audio_data)
         except Exception as e:
             print(f"  ⚠ Skipping {clip_path}: {e}")
 
-    print(f"  ✓ Extracted features from {len(all_features)} clips total")
-    print()
+    print(f"  → Loaded {len(positive_audio)} positive and {len(negative_audio)} negative clips")
 
-    # Prepare training data
-    X = np.concatenate(all_features, axis=0).astype(np.float32)
-    y = np.concatenate(all_labels, axis=0).astype(np.float32)
+    # Use embed_clips for batch processing (returns shape: N, frames, 96)
+    print("  → Computing embeddings for positive samples...")
+    positive_features = F.embed_clips(positive_audio, batch_size=512, ncpu=4)
+    print(f"    Positive features shape: {positive_features.shape}")
+
+    print("  → Computing embeddings for negative samples...")
+    negative_features = F.embed_clips(negative_audio, batch_size=512, ncpu=4)
+    print(f"    Negative features shape: {negative_features.shape}")
+
+    # Stack features and create labels
+    X = np.vstack((positive_features, negative_features)).astype(np.float32)
+    y = np.array([1]*len(positive_features) + [0]*len(negative_features), dtype=np.float32)
 
     print(f"📈 Training data shape: {X.shape}")
     print(f"   Positive samples: {np.sum(y == 1):.0f}")
@@ -138,7 +126,15 @@ def main():
 
     # Build TensorFlow model - architecture from official openWakeWord notebook
     layer_dim = 32  # Official recommended size for pre-trained embeddings
-    input_dim = X.shape[1]
+
+    # X shape is (N, frames, 96) - need to flatten frames*96
+    input_shape = (X.shape[1], X.shape[2])  # (frames, 96)
+    flattened_dim = X.shape[1] * X.shape[2]  # frames * 96
+
+    print(f"📐 Model architecture:")
+    print(f"   Input shape: {input_shape} → flattened to {flattened_dim}")
+    print(f"   Hidden layers: {layer_dim} units each")
+    print()
 
     # Calculate class weights (10x weight for negative samples to reduce false positives)
     positive_count = np.sum(y == 1)
@@ -154,7 +150,8 @@ def main():
     print()
 
     model = keras.Sequential([
-        keras.layers.Input(shape=(input_dim,)),
+        keras.layers.Input(shape=input_shape),
+        keras.layers.Flatten(),  # Flatten (frames, 96) to (frames*96,)
         keras.layers.Dense(layer_dim),
         keras.layers.LayerNormalization(),
         keras.layers.ReLU(),
