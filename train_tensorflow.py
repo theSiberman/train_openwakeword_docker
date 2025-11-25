@@ -186,7 +186,7 @@ def main():
     print()
     print("📦 Converting to TFLite...")
     converter = tf.lite.TFLiteConverter.from_saved_model(f"{output_model}_savedmodel")
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    # converter.optimizations = [tf.lite.Optimize.DEFAULT]
     tflite_model = converter.convert()
 
     tflite_path = f"{output_model}.tflite"
