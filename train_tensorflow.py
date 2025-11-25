@@ -137,7 +137,7 @@ def main():
     print()
 
     # Build TensorFlow model
-    layer_dim = 64  # Increased from 32 for better capacity with more data
+    layer_dim = 128  # Increased from 32 for better capacity with more data
     input_dim = X.shape[1]
 
     model = keras.Sequential([
