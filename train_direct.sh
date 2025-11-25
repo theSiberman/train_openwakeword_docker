@@ -167,38 +167,54 @@ print(f"   Positive samples: {np.sum(y == 1)}")
 print(f"   Negative samples: {np.sum(y == 0)}")
 print()
 
-# Build model
-layer_dim = 64  # Increased from 32 for better capacity with more data
+# Build model - architecture from official openWakeWord notebook
+layer_dim = 32  # Official recommended size for pre-trained embeddings
 input_dim = X.shape[1]
 
 model = nn.Sequential(
     nn.Linear(input_dim, layer_dim),
     nn.LayerNorm(layer_dim),
     nn.ReLU(),
-    nn.Dropout(0.3),
     nn.Linear(layer_dim, layer_dim),
     nn.LayerNorm(layer_dim),
     nn.ReLU(),
-    nn.Dropout(0.3),
     nn.Linear(layer_dim, 1),
     nn.Sigmoid(),
 )
 
 # Train
 print("🧠 Training model...")
+
+# Calculate class weights (10x weight for negative samples to reduce false positives)
+positive_count = np.sum(y == 1)
+negative_count = np.sum(y == 0)
+total = len(y)
+weight_for_0 = (1 / negative_count) * (total / 2.0) * 10  # 10x weight on negatives
+weight_for_1 = (1 / positive_count) * (total / 2.0)
+
+# Create sample weights
+sample_weights = np.where(y == 0, weight_for_0, weight_for_1)
+sample_weights_tensor = torch.from_numpy(sample_weights).float().squeeze()
+
+print(f"📊 Class weights:")
+print(f"   Negative class weight: {weight_for_0:.4f}")
+print(f"   Positive class weight: {weight_for_1:.4f}")
+print()
+
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 X_tensor = torch.from_numpy(X).float()
 y_tensor = torch.from_numpy(y).float()
 
-epochs = 100  # Increased from 50 for better convergence
+epochs = 10  # Official recommended value
 for epoch in range(epochs):
     optimizer.zero_grad()
     predictions = model(X_tensor)
-    loss = torch.nn.functional.binary_cross_entropy(predictions, y_tensor)
+    # Apply weighted binary cross-entropy
+    loss = torch.nn.functional.binary_cross_entropy(predictions, y_tensor, weight=sample_weights_tensor)
     loss.backward()
     optimizer.step()
 
-    if (epoch+1) % 10 == 0:
+    if (epoch+1) % 2 == 0:
         # Calculate accuracy
         predicted_labels = (predictions > 0.5).float()
         accuracy = (predicted_labels == y_tensor).float().mean()

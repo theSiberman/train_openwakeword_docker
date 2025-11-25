@@ -136,20 +136,31 @@ def main():
     print(f"   Negative samples: {np.sum(y == 0):.0f}")
     print()
 
-    # Build TensorFlow model
-    layer_dim = 128  # Increased from 32 for better capacity with more data
+    # Build TensorFlow model - architecture from official openWakeWord notebook
+    layer_dim = 32  # Official recommended size for pre-trained embeddings
     input_dim = X.shape[1]
+
+    # Calculate class weights (10x weight for negative samples to reduce false positives)
+    positive_count = np.sum(y == 1)
+    negative_count = np.sum(y == 0)
+    total = len(y)
+    weight_for_0 = (1 / negative_count) * (total / 2.0)
+    weight_for_1 = (1 / positive_count) * (total / 2.0)
+    class_weight = {0: weight_for_0 * 10, 1: weight_for_1}  # 10x weight on negatives
+
+    print(f"📊 Class weights:")
+    print(f"   Negative class weight: {class_weight[0]:.4f}")
+    print(f"   Positive class weight: {class_weight[1]:.4f}")
+    print()
 
     model = keras.Sequential([
         keras.layers.Input(shape=(input_dim,)),
         keras.layers.Dense(layer_dim),
         keras.layers.LayerNormalization(),
         keras.layers.ReLU(),
-        keras.layers.Dropout(0.3),
         keras.layers.Dense(layer_dim),
         keras.layers.LayerNormalization(),
         keras.layers.ReLU(),
-        keras.layers.Dropout(0.3),
         keras.layers.Dense(1, activation='sigmoid'),
     ])
 
@@ -164,13 +175,14 @@ def main():
 
     class TrainingCallback(keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
-            if (epoch + 1) % 10 == 0:
-                print(f"  → Epoch {epoch+1}/100, Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
+            if (epoch + 1) % 2 == 0:
+                print(f"  → Epoch {epoch+1}/10, Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
 
     history = model.fit(
         X, y,
-        epochs=100,  # Increased from 50 for better convergence
-        batch_size=32,
+        epochs=10,  # Official recommended value
+        batch_size=512,  # Official recommended value for stability
+        class_weight=class_weight,  # 10x weight on negatives to reduce false positives
         verbose=0,
         callbacks=[TrainingCallback()]
     )
