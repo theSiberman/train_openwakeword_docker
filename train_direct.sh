@@ -55,6 +55,12 @@ fi
 echo "Training model..."
 echo ""
 
+# Export variables for Python script
+export OUTPUT_MODEL
+export GENERATED_DIR
+export REAL_DIR
+export NEGATIVE_DIR
+
 $PYTHON_CMD << 'PYTHON_TRAIN'
 import glob, os, shutil
 import numpy as np
@@ -95,6 +101,10 @@ for i, clip_path in enumerate(positive_paths):
     try:
         sr, audio_data = wav.read(clip_path)
 
+        # Convert stereo to mono if needed
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data.mean(axis=1)
+
         # AudioFeatures expects int16 data
         if audio_data.dtype != np.int16:
             if audio_data.dtype in [np.float32, np.float64]:
@@ -103,7 +113,12 @@ for i, clip_path in enumerate(positive_paths):
                 audio_data = (audio_data / 65536).astype(np.int16)
 
         features = F._get_embeddings(audio_data)
-        if features.shape[0] > 0:
+
+        # Ensure features are 2D and have valid shape
+        if len(features.shape) == 1:
+            # Skip 1D features (likely too short or corrupted)
+            continue
+        if features.shape[0] > 0 and len(features.shape) == 2:
             all_features.append(features)
             all_labels.append(np.ones((features.shape[0], 1)))  # Label 1 for positive
     except Exception as e:
@@ -117,6 +132,10 @@ for i, clip_path in enumerate(negative_paths):
     try:
         sr, audio_data = wav.read(clip_path)
 
+        # Convert stereo to mono if needed
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data.mean(axis=1)
+
         # AudioFeatures expects int16 data
         if audio_data.dtype != np.int16:
             if audio_data.dtype in [np.float32, np.float64]:
@@ -125,7 +144,12 @@ for i, clip_path in enumerate(negative_paths):
                 audio_data = (audio_data / 65536).astype(np.int16)
 
         features = F._get_embeddings(audio_data)
-        if features.shape[0] > 0:
+
+        # Ensure features are 2D and have valid shape
+        if len(features.shape) == 1:
+            # Skip 1D features (likely too short or corrupted)
+            continue
+        if features.shape[0] > 0 and len(features.shape) == 2:
             all_features.append(features)
             all_labels.append(np.zeros((features.shape[0], 1)))  # Label 0 for negative
     except Exception as e:
