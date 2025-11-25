@@ -1,6 +1,7 @@
 # Generated audio samples
 generated_samples/
 real_samples/
+negative_samples/
 
 # Voice models (large files - download via setup.sh)
 models/
@@ -11,6 +12,7 @@ models/
 piper-sample-generator/
 
 # Trained models (output files)
+*.tflite
 
 # Python cache
 __pycache__/
