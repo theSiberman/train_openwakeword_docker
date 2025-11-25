@@ -106,6 +106,22 @@ def main():
 
     print(f"  → Loaded {len(positive_audio)} positive and {len(negative_audio)} negative clips")
 
+    # Pad/truncate all clips to standard length (1.28 seconds at 16kHz = 20480 samples)
+    # This matches openWakeWord's expected audio length
+    target_length = 20480
+
+    def pad_or_truncate(audio, target_len):
+        """Pad or truncate audio to target length"""
+        if len(audio) > target_len:
+            return audio[:target_len]
+        elif len(audio) < target_len:
+            return np.pad(audio, (0, target_len - len(audio)), mode='constant')
+        return audio
+
+    print("  → Normalizing clip lengths...")
+    positive_audio = np.array([pad_or_truncate(clip, target_length) for clip in positive_audio])
+    negative_audio = np.array([pad_or_truncate(clip, target_length) for clip in negative_audio])
+
     # Use embed_clips for batch processing (returns shape: N, frames, 96)
     print("  → Computing embeddings for positive samples...")
     positive_features = F.embed_clips(positive_audio, batch_size=512, ncpu=4)
