@@ -111,13 +111,14 @@ if [ $SYNTHETIC_POSITIVE -gt 0 ]; then
         TEMP_DIR="$GENERATED_DIR/${VOICE_NAME}_temp"
         mkdir -p "$TEMP_DIR"
 
-        $PYTHON_CMD /opt/piper-sample-generator/generate_samples.py "$WAKE_WORD" \
+        # Set environment variables to prevent ONNX Runtime thread affinity warnings
+        OMP_NUM_THREADS=4 ORT_NUM_THREADS=4 $PYTHON_CMD /opt/piper-sample-generator/generate_samples.py "$WAKE_WORD" \
             --model "$VOICE" \
             --max-samples $COUNT \
             --output-dir "$TEMP_DIR" \
             --slerp-weights 0.3 \
             --length-scales 0.8 1.0 1.2 \
-            --noise-scales 0.4 0.667 0.8 2>&1 | grep -v "WARNING"
+            --noise-scales 0.4 0.667 0.8 2>&1 | grep -v "WARNING\|pthread_setaffinity_np"
 
         # Rename files with voice prefix and move to main directory
         for file in "$TEMP_DIR"/*.wav; do

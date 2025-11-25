@@ -34,7 +34,8 @@
       "Bash(pip3 install:*)",
       "Bash(git config:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pip3.10 install:*)"
     ],
     "deny": [],
     "ask": []

@@ -70,7 +70,18 @@ if command -v python3.10 &> /dev/null; then
     PYTHON_CMD="python3.10"
 fi
 
-$PYTHON_CMD -m pip install -q openwakeword piper-tts webrtcvad onnx onnx-tf onnxscript tensorflow torch torchinfo==1.8.0 torchmetrics==1.2.0 mutagen==1.47.0 scipy matplotlib datasets speechbrain soundfile librosa
+# Install core dependencies first
+$PYTHON_CMD -m pip install -q numpy scipy
+
+# Install remaining packages
+$PYTHON_CMD -m pip install -q openwakeword piper-tts webrtcvad onnx onnx-tf onnxscript tensorflow torch torchinfo==1.8.0 torchmetrics==1.2.0 mutagen==1.47.0 matplotlib datasets speechbrain soundfile librosa
+
+# Verify critical packages are installed
+if ! $PYTHON_CMD -c "import numpy, scipy, tensorflow, openwakeword" 2>/dev/null; then
+    echo "  ⚠ Error: Some required packages failed to install"
+    echo "  Try running: $PYTHON_CMD -m pip install numpy scipy tensorflow openwakeword"
+    exit 1
+fi
 
 echo "  ✓ Python packages installed"
 
