@@ -140,8 +140,10 @@ generate_tts() {
     local text="$1"
     local voice="$2"
     local output_file="$3"
+    local temp_file="${output_file}.tmp"
 
-    curl -s -X POST "https://api.groq.com/openai/v1/audio/speech" \
+    # Call Groq API with error checking
+    HTTP_CODE=$(curl -s -w "%{http_code}" -X POST "https://api.groq.com/openai/v1/audio/speech" \
         -H "Authorization: Bearer $GROQ_API_KEY" \
         -H "Content-Type: application/json" \
         -d "{
@@ -150,13 +152,40 @@ generate_tts() {
             \"voice\": \"$voice\",
             \"response_format\": \"wav\"
         }" \
-        --output "$output_file"
+        --output "$temp_file")
 
-    # Convert to 16kHz mono if needed (openwakeword requirement)
-    if command -v ffmpeg &> /dev/null; then
-        ffmpeg -i "$output_file" -ar 16000 -ac 1 -y "${output_file%.wav}_16k.wav" 2>/dev/null
-        mv "${output_file%.wav}_16k.wav" "$output_file"
+    # Check if request succeeded
+    if [ "$HTTP_CODE" != "200" ]; then
+        echo "API Error (HTTP $HTTP_CODE)"
+        # Show error details if file contains JSON error
+        if [ -f "$temp_file" ]; then
+            cat "$temp_file"
+            rm -f "$temp_file"
+        fi
+        return 1
     fi
+
+    # Check if file was created and has content
+    if [ ! -f "$temp_file" ] || [ ! -s "$temp_file" ]; then
+        echo "Empty response"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    # Convert to 16kHz mono if ffmpeg available
+    if command -v ffmpeg &> /dev/null; then
+        if ffmpeg -i "$temp_file" -ar 16000 -ac 1 -y "$output_file" 2>/dev/null; then
+            rm -f "$temp_file"
+        else
+            # ffmpeg failed, use original
+            mv "$temp_file" "$output_file"
+        fi
+    else
+        # No ffmpeg, use original
+        mv "$temp_file" "$output_file"
+    fi
+
+    return 0
 }
 
 mkdir -p "$OUTPUT_DIR"
@@ -192,7 +221,7 @@ case $MODE in
             fi
 
             # Rate limiting - be nice to API
-            sleep 0.1
+            sleep 6.1
         done
         ;;
 

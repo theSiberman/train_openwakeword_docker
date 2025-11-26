@@ -152,13 +152,13 @@ def main():
     print(f"   Hidden layers: {layer_dim} units each")
     print()
 
-    # Calculate class weights (10x weight for negative samples to reduce false positives)
+    # Calculate class weights (20x weight for negative samples to reduce false positives)
     positive_count = np.sum(y == 1)
     negative_count = np.sum(y == 0)
     total = len(y)
     weight_for_0 = (1 / negative_count) * (total / 2.0)
     weight_for_1 = (1 / positive_count) * (total / 2.0)
-    class_weight = {0: weight_for_0 * 10, 1: weight_for_1}  # 10x weight on negatives
+    class_weight = {0: weight_for_0 * 20, 1: weight_for_1}  # 20x weight on negatives (increased from 10x)
 
     print(f"📊 Class weights:")
     print(f"   Negative class weight: {class_weight[0]:.4f}")
