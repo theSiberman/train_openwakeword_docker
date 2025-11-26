@@ -158,7 +158,7 @@ def main():
     total = len(y)
     weight_for_0 = (1 / negative_count) * (total / 2.0)
     weight_for_1 = (1 / positive_count) * (total / 2.0)
-    class_weight = {0: weight_for_0 * 15, 1: weight_for_1}  # 15x weight (balanced to prevent overfitting)
+    class_weight = {0: weight_for_0 * 10, 1: weight_for_1}  # 10x weight (official spec, prevents overfitting)
 
     print(f"📊 Class weights:")
     print(f"   Negative class weight: {class_weight[0]:.4f}")
