@@ -185,17 +185,25 @@ def main():
 
     # Train
     print("🧠 Training model...")
+    print("   Note: For feedback loop prevention, training longer (100 epochs)")
+    print()
 
     class TrainingCallback(keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
-            if (epoch + 1) % 2 == 0:
-                print(f"  → Epoch {epoch+1}/10, Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
+            if (epoch + 1) % 10 == 0:
+                val_loss = logs.get('val_loss', 0)
+                val_acc = logs.get('val_accuracy', 0)
+                if val_loss > 0:
+                    print(f"  → Epoch {epoch+1}/100 | Train Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.2%} | Val Loss: {val_loss:.4f}, Acc: {val_acc:.2%}")
+                else:
+                    print(f"  → Epoch {epoch+1}/100 | Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
 
     history = model.fit(
         X, y,
-        epochs=10,  # Official recommended value
-        batch_size=512,  # Official recommended value for stability
-        class_weight=class_weight,  # 10x weight on negatives to reduce false positives
+        epochs=100,  # Increased for feedback loop prevention - model needs time to learn hard negatives
+        batch_size=256,  # Reduced from 512 for more gradient updates
+        validation_split=0.15,  # Hold out 15% for validation
+        class_weight=class_weight,  # 20x weight on negatives to reduce false positives
         verbose=0,
         callbacks=[TrainingCallback()]
     )
