@@ -1,6 +1,11 @@
 #!/bin/bash
 # Generate training samples (positive wake word + negative background audio)
-# Usage: ./generate_samples_direct.sh "wake word phrase" [--positive-count 3000] [--negative-count 6000]
+# Usage: ./generate_samples_direct.sh "wake word phrase" [--positive-count 3000] [--negative-count 6000] [--force]
+#
+# Options:
+#   --positive-count N   Generate N positive samples (default: 3000)
+#   --negative-count N   Generate N negative samples (default: 6000)
+#   --force             Skip prompts and regenerate all samples
 
 set -e
 
@@ -12,6 +17,7 @@ VOICE_DIR="./models"
 GENERATED_DIR="./generated_samples"
 REAL_DIR="./real_samples"
 NEGATIVE_DIR="./negative_samples"
+FORCE_REGENERATE=false
 
 # Parse optional arguments
 shift 2>/dev/null || true
@@ -25,6 +31,10 @@ while [[ $# -gt 0 ]]; do
             NEGATIVE_COUNT="$2"
             shift 2
             ;;
+        --force)
+            FORCE_REGENERATE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -35,7 +45,7 @@ done
 # Validate wake word
 if [ -z "$WAKE_WORD" ]; then
     echo "❌ Error: Wake word phrase is required"
-    echo "Usage: $0 \"wake word phrase\" [--positive-count 3000] [--negative-count 6000]"
+    echo "Usage: $0 \"wake word phrase\" [--positive-count 3000] [--negative-count 6000] [--force]"
     exit 1
 fi
 
@@ -51,6 +61,65 @@ echo ""
 PYTHON_CMD="python3"
 if command -v python3.10 &> /dev/null; then
     PYTHON_CMD="python3.10"
+fi
+
+# --- Check for existing generated samples ---
+EXISTING_GENERATED=$(ls "$GENERATED_DIR"/*.wav 2>/dev/null | wc -l)
+EXISTING_NEGATIVES=$(ls "$NEGATIVE_DIR"/*.wav 2>/dev/null | wc -l)
+
+if [ $EXISTING_GENERATED -gt 0 ] || [ $EXISTING_NEGATIVES -gt 0 ]; then
+    echo "⚠️  Existing samples detected:"
+    [ $EXISTING_GENERATED -gt 0 ] && echo "   • Generated positives: $EXISTING_GENERATED files in $GENERATED_DIR"
+    [ $EXISTING_NEGATIVES -gt 0 ] && echo "   • Negatives: $EXISTING_NEGATIVES files in $NEGATIVE_DIR"
+    echo ""
+
+    if [ "$FORCE_REGENERATE" = true ]; then
+        echo "🗑️  --force flag detected, deleting and regenerating..."
+        rm -f "$GENERATED_DIR"/*.wav 2>/dev/null || true
+        rm -f "$NEGATIVE_DIR"/*.wav 2>/dev/null || true
+        echo "✓ Deleted. Starting fresh generation..."
+        echo ""
+    else
+        echo "Options:"
+        echo "  1) Skip generation (use existing samples)"
+        echo "  2) Delete and regenerate all"
+        echo "  3) Keep existing and add more (append)"
+        echo "  4) Cancel"
+        echo ""
+        read -p "Choose [1-4]: " choice
+
+        case $choice in
+            1)
+                echo "✓ Skipping generation, using existing samples"
+                echo ""
+                echo "Summary:"
+                echo "  • Generated positives: $EXISTING_GENERATED"
+                echo "  • Negatives: $EXISTING_NEGATIVES"
+                echo ""
+                echo "Ready to train with existing samples!"
+                exit 0
+                ;;
+            2)
+                echo "🗑️  Deleting existing samples..."
+                rm -f "$GENERATED_DIR"/*.wav 2>/dev/null || true
+                rm -f "$NEGATIVE_DIR"/*.wav 2>/dev/null || true
+                echo "✓ Deleted. Starting fresh generation..."
+                echo ""
+                ;;
+            3)
+                echo "✓ Keeping existing samples, will add more"
+                echo ""
+                ;;
+            4)
+                echo "Cancelled."
+                exit 0
+                ;;
+            *)
+                echo "Invalid choice. Cancelled."
+                exit 1
+                ;;
+        esac
+    fi
 fi
 
 # --- Step 1: Count existing real samples ---
@@ -73,10 +142,9 @@ if [ $SYNTHETIC_POSITIVE -gt 0 ]; then
     echo "[2/2] Generating positive samples with voice variety..."
     mkdir -p "$GENERATED_DIR"
 
-    # Define voice models (4 voices)
+    # Define voice models (3 voices - REMOVED Alan Medium to prevent TTS feedback loop)
     VOICES=(
         "$VOICE_DIR/en_US-lessac-medium.onnx"
-        "$VOICE_DIR/en_GB-alan-medium.onnx"
         "$VOICE_DIR/en_GB-alba-medium.onnx"
         "$VOICE_DIR/en_US-libritts-high.onnx"
     )
@@ -85,7 +153,7 @@ if [ $SYNTHETIC_POSITIVE -gt 0 ]; then
     SAMPLES_PER_VOICE=$((SYNTHETIC_POSITIVE / ${#VOICES[@]}))
     REMAINDER=$((SYNTHETIC_POSITIVE % ${#VOICES[@]}))
 
-    echo "  → Generating ~$SAMPLES_PER_VOICE samples per voice (4 voices total)"
+    echo "  → Generating ~$SAMPLES_PER_VOICE samples per voice (3 voices total)"
     echo ""
 
     # Generate samples for each voice with acoustic variations
