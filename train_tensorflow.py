@@ -152,13 +152,13 @@ def main():
     print(f"   Hidden layers: {layer_dim} units each")
     print()
 
-    # Calculate class weights (20x weight for negative samples to reduce false positives)
+    # Calculate class weights (15x weight for negative samples to reduce false positives)
     positive_count = np.sum(y == 1)
     negative_count = np.sum(y == 0)
     total = len(y)
     weight_for_0 = (1 / negative_count) * (total / 2.0)
     weight_for_1 = (1 / positive_count) * (total / 2.0)
-    class_weight = {0: weight_for_0 * 20, 1: weight_for_1}  # 20x weight on negatives (increased from 10x)
+    class_weight = {0: weight_for_0 * 15, 1: weight_for_1}  # 15x weight (balanced to prevent overfitting)
 
     print(f"📊 Class weights:")
     print(f"   Negative class weight: {class_weight[0]:.4f}")
@@ -171,9 +171,11 @@ def main():
         keras.layers.Dense(layer_dim),
         keras.layers.LayerNormalization(),
         keras.layers.ReLU(),
+        keras.layers.Dropout(0.2),  # Add dropout to prevent overfitting
         keras.layers.Dense(layer_dim),
         keras.layers.LayerNormalization(),
         keras.layers.ReLU(),
+        keras.layers.Dropout(0.2),  # Add dropout to prevent overfitting
         keras.layers.Dense(1, activation='sigmoid'),
     ])
 
@@ -185,27 +187,35 @@ def main():
 
     # Train
     print("🧠 Training model...")
-    print("   Note: For feedback loop prevention, training longer (100 epochs)")
+    print("   Using early stopping to prevent overfitting")
     print()
 
     class TrainingCallback(keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
-            if (epoch + 1) % 10 == 0:
+            if (epoch + 1) % 5 == 0:
                 val_loss = logs.get('val_loss', 0)
                 val_acc = logs.get('val_accuracy', 0)
                 if val_loss > 0:
-                    print(f"  → Epoch {epoch+1}/100 | Train Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.2%} | Val Loss: {val_loss:.4f}, Acc: {val_acc:.2%}")
+                    print(f"  → Epoch {epoch+1}/50 | Train Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.2%} | Val Loss: {val_loss:.4f}, Acc: {val_acc:.2%}")
                 else:
-                    print(f"  → Epoch {epoch+1}/100 | Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
+                    print(f"  → Epoch {epoch+1}/50 | Loss: {logs['loss']:.4f}, Accuracy: {logs['accuracy']:.2%}")
+
+    # Early stopping to prevent overfitting
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=10,  # Stop if val_loss doesn't improve for 10 epochs
+        restore_best_weights=True,
+        verbose=1
+    )
 
     history = model.fit(
         X, y,
-        epochs=100,  # Increased for feedback loop prevention - model needs time to learn hard negatives
-        batch_size=256,  # Reduced from 512 for more gradient updates
+        epochs=50,  # Reduced from 100, early stopping will cut off sooner
+        batch_size=256,  # Smaller batches for more updates
         validation_split=0.15,  # Hold out 15% for validation
-        class_weight=class_weight,  # 20x weight on negatives to reduce false positives
+        class_weight=class_weight,  # 15x weight on negatives
         verbose=0,
-        callbacks=[TrainingCallback()]
+        callbacks=[TrainingCallback(), early_stopping]
     )
 
     print()
